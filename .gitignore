@@ -1,5 +1,6 @@
 Mercury/
 Mercury.modules
+HandwrittenData.csv
 *.mh
 *.err
 *.init

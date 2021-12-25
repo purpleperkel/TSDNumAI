@@ -27,7 +27,11 @@ def run_example():
 	# predict the class
 	predict_value = model.predict(img)
 	digit = argmax(predict_value)
-	print(digit)
+	answer = str(digit)
+	if (digit > 9):
+		answer = str(chr(digit-10+95))
+
+	print(answer)
  
 # entry point, run the example
 run_example()

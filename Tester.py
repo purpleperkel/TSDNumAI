@@ -3,7 +3,7 @@ from keras.preprocessing.image import load_img
 from keras.preprocessing.image import img_to_array
 from keras.models import load_model
 import cv2
- 
+
 # load and prepare the image
 def load_image(filename):
 	# load the image
@@ -29,7 +29,7 @@ def run_example():
 	digit = argmax(predict_value)
 	answer = str(digit)
 	if (digit > 9):
-		answer = str(chr(digit-10+95))
+		answer = str(chr(digit-10+65))
 
 	print(answer)
  

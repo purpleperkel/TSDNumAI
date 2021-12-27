@@ -6,6 +6,7 @@ import argparse
 import cv2
 
 model = load_model('ConvNet.h5')
+panMode = True
 
 def sort_contours(cnts, method="left-to-right"):
 	# initialize the reverse flag and sort index
@@ -26,126 +27,139 @@ def sort_contours(cnts, method="left-to-right"):
 	# return the list of sorted contours and bounding boxes
 	return (cnts, boundingBoxes)
 
+def get_edges(src, cdim, roipad, pan, tmp):
+    edged = cv2.Canny(src, 50, 250)
+    edgepic = np.array(edged)
+    edgepic = Image.fromarray(edgepic.astype(np.uint8))
+    edgepic.save('edgepic.jpeg', 'JPEG')
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(1,1))
+    dilated = cv2.dilate(edged, kernel)
+    dpic = Image.fromarray(dilated.astype(np.uint8))
+    dpic.save('dilated.jpeg', 'JPEG')
+    #cnts = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL,
+    #    cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cv2.findContours(dilated.copy(), cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE)
+
+    if len(cnts) == 2:
+        cnts = cnts[0]
+
+    # if the length of the contours tuple is '3' then we are using
+    # either OpenCV v3, v4-pre, or v4-alpha
+    elif len(cnts) == 3:
+        cnts = cnts[1]
+
+    cnts = sort_contours(cnts, method="left-to-right")[0]
+    # initialize the list of contour bounding boxes and associated
+    # characters that we'll be OCR'ing
+    chars = []
+    boxes = []
+
+    (wx, wy, lx, ly) = cdim
+    (pwx, pwy, plx, ply) = roipad
+    # loop over the contours
+    for c in cnts:
+        # compute the bounding box of the contour
+        (x, y, w, h) = cv2.boundingRect(c)
+        a = None
+        b = None
+        d = None
+        if (not pan):
+            (a,b) = src.shape
+        else:
+            (a,b,d) = src.shape
+        # filter out bounding boxes, ensuring they are neither too small
+        # nor too large
+        if (w/a >= wx and w/a <= wy) and (h/b >= lx and h/b <= ly):
+            # extract the character and threshold it to make the character
+            # appear as *white* (foreground) on a *black* background, then
+            # grab the width and height of the thresholded image
+            roi = None
+            if (pan):
+                roi = tmp[(y+pwx):y+h+pwy, (x+plx):x + w+ply]
+            else:
+                roi = src[(y+pwx):y+h+pwy, (x+plx):x + w+ply]
+            thresh = cv2.threshold(roi, 0, 255,
+                cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
+            if (thresh is None or (np.all(thresh==0))):
+                continue 
+            (tH, tW) = thresh.shape
+            dim = None
+            (hi, wi) = thresh.shape[:2]
+            if tW < tH:
+                r = 32 / float(hi)
+                z = int(wi * r)
+                dim = ([z, 1][(z == 0)], 32)
+            # otherwise, resize along the height
+            else:
+                r = 32 / float(wi)
+                z = int(hi * r)
+                dim = (32, [z, 1][(z == 0)])
+
+            if (not pan):
+                thresh = cv2.resize(thresh, dim)
+
+            # re-grab the image dimensions (now that its been resized)
+            # and then determine how much we need to pad the width and
+            # height such that our image will be 32x32
+            (tH, tW) = thresh.shape
+            dX = int(max(0, 32 - tW) / 2.0)
+            dY = int(max(0, 32 - tH) / 2.0)
+            # pad the image and force 32x32 dimensions
+            padded = cv2.copyMakeBorder(thresh, top=dY, bottom=dY,
+                left=dX, right=dX, borderType=cv2.BORDER_CONSTANT,
+                value=(255, 255, 255))
+            if (not pan):
+                thresh = cv2.resize(padded, (32, 32))
+
+            # prepare the padded image for classification via our
+            # handwriting OCR model
+            if (pan):
+                ckimg2 = Image.fromarray(thresh)
+                ckimg2.show()
+                #thresh = cv2.GaussianBlur(thresh, (3, 3), 0)
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(2,2))
+                #erosion = cv2.morphologyEx(thresh,cv2.MORPH_OPEN,kernel)
+                erosion = cv2.erode(thresh,kernel,iterations = 1)
+                erosion = cv2.dilate(thresh,kernel,iterations = 1)
+                erosion = cv2.erode(thresh,kernel,iterations = 1)
+                morphpic = Image.fromarray(erosion.astype(np.uint8))
+                morphpic.save('morph.jpeg', 'JPEG')
+                thresh = cv2.GaussianBlur(erosion, (5, 5), 0)
+                (chars, boxes) = get_edges(thresh, (0, 1, 0, 1), (0, 0, 0, 0), False, None)
+            else:
+                thresh = cv2.bitwise_not(thresh)
+                ckimg2 = Image.fromarray(thresh)
+                ckimg2.show()
+                thresh = np.expand_dims(thresh, axis=-1)
+                thresh = thresh.reshape(1, 32, 32, 1)
+                thresh = thresh.astype('float32')
+                thresh = thresh / 255.0
+                chars.append(thresh)
+                boxes.append((x,y,w,h))
+    return (chars, boxes)
+
 # load the input image from disk, convert it to grayscale, and blur
 # it to reduce noise
 image = cv2.imread("sample.png")
 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+temp = gray
+if (panMode):
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    lower_gray = np.array([0, 0, 80], np.uint8)
+    upper_gray = np.array([0, 0, 120], np.uint8)
+    mask = cv2.inRange(hsv, lower_gray, upper_gray)
+    img_res = cv2.bitwise_and(image, image, mask = mask)
+    gray = img_res
+
 cv2.imwrite('gray.png',gray)
-#gray = img_res
-
-#blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-# perform edge detection, find contours in the edge map, and sort the
-# resulting contours from left-to-right
-edged = cv2.Canny(blurred, 60, 250)
-edgepic = np.array(edged)
-edgepic = Image.fromarray(edgepic.astype(np.uint8))
-edgepic.save('edgepic.jpeg', 'JPEG')
-#np.reshape(edgepic, (192,192))
-cnts = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL,
-	cv2.CHAIN_APPROX_SIMPLE)
-
-if len(cnts) == 2:
-    cnts = cnts[0]
-
-# if the length of the contours tuple is '3' then we are using
-# either OpenCV v3, v4-pre, or v4-alpha
-elif len(cnts) == 3:
-    cnts = cnts[1]
-
-cnts = sort_contours(cnts, method="left-to-right")[0]
-# initialize the list of contour bounding boxes and associated
-# characters that we'll be OCR'ing
-chars = []
-boxes = []
-
-# loop over the contours
-for c in cnts:
-	# compute the bounding box of the contour
-    (x, y, w, h) = cv2.boundingRect(c)
-    (a,b,c) = image.shape
-	# filter out bounding boxes, ensuring they are neither too small
-	# nor too large
-    if (w/a >= 0 and w/a <= .5) and (h/b >= .1 and h/b <= .8):
-        # extract the character and threshold it to make the character
-        # appear as *white* (foreground) on a *black* background, then
-        # grab the width and height of the thresholded image
-        roi = gray[(y-2):y+h+2, (x-2):x + w+2]
-        #roi = gray[(y):y + h, (x):x + w]
-        thresh = cv2.threshold(roi, 0, 255,
-            cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
-        if (thresh is None or (np.all(thresh==0))):
-            continue 
-        (tH, tW) = thresh.shape
-        dim = None
-        (hi, wi) = thresh.shape[:2]
-        if tW < tH:
-            r = 32 / float(hi)
-            z = int(wi * r)
-            dim = ([z, 1][(z == 0)], 32)
-        # otherwise, resize along the height
-        else:
-            r = 32 / float(wi)
-            z = int(hi * r)
-            dim = (32, [z, 1][(z == 0)])
-
-        thresh = cv2.resize(thresh, dim)
-
-        # re-grab the image dimensions (now that its been resized)
-        # and then determine how much we need to pad the width and
-        # height such that our image will be 32x32
-        (tH, tW) = thresh.shape
-        dX = int(max(0, 32 - tW) / 2.0)
-        dY = int(max(0, 32 - tH) / 2.0)
-        # pad the image and force 32x32 dimensions
-        padded = cv2.copyMakeBorder(thresh, top=dY, bottom=dY,
-            left=dX, right=dX, borderType=cv2.BORDER_CONSTANT,
-            value=(255, 255, 255))
-        thresh = cv2.resize(padded, (32, 32))
-        # prepare the padded image for classification via our
-        # handwriting OCR model
-        #padded = padded.astype("float32") / 255.0
-        #padded = np.expand_dims(padded, axis=-1)
-        # update our list of characters that will be OCR'd
-        #thresh = np.reshape(thresh, -1)
-        #thresh = np.expand_dims(thresh, axis=-1)
-        
-        #thresh = np.reshape(thresh, (1, 32, 32, 1))
-        #padded = np.reshape(padded, (1, 32, 32, 1))
-        #thresh = Image.fromarray(thresh)
-        #thresh.show()
-        
-        #thresh = np.asarray(thresh)
-        #tmp = np.zeros(32*32).reshape(1,32,32,1)
-        thresh = cv2.bitwise_not(thresh)
-        ckimg2 = Image.fromarray(thresh)
-        ckimg2.show()
-        thresh = np.expand_dims(thresh, axis=-1)
-        thresh = thresh.reshape(1, 32, 32, 1)
-        thresh = thresh.astype('float32')
-        thresh = thresh / 255.0
-        chars.append(thresh)
-        boxes.append((x,y,w,h))
-
-        #thresh = np.expand_dims(thresh, axis=-1)
-        #thresh = thresh.reshape(1, 32, 32, 1)
-        #thresh = thresh.astype('float32')
-        #thresh = thresh / 255.0
-        #thresh = tmp + thresh
-        #thresh = np.array(thresh, dtype="float32")
-        #cv2.imshow("Image", thresh)
-        #ckimg = Image.fromarray(thresh)
-        #ckimg.save("tmp.png")
-        #thresh = np.expand_dims(thresh, axis=-1)
-
-        #img = load_img(thresh)
-        #chars.append(thresh)
-        #boxes.append((x,y,w,h))
-        #end if
-
-# extract the bounding box locations and padded characters
-#boxes = [b[1] for b in chars]
-#chars = np.array([c[0] for c in chars], dtype="float32")
+cv2.imwrite('blurred.png',blurred)
+if (panMode):
+    #(chars, boxes) = get_edges(blurred, (.25, .45, .25, .35), (11, -4, 4, -4), True, temp)
+    (chars, boxes) = get_edges(blurred, (.25, .45, .25, .35), (11, -8, 10, -4), True, temp)
+else:
+    (chars, boxes) = get_edges(blurred, (0, .8, .1, .9), (-2, 2, -2, 2), False, None)
 # OCR the characters using our handwriting recognition model
 preds = list(map(model.predict, chars))
 # define the list of label names

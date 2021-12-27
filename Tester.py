@@ -2,7 +2,10 @@ from numpy import argmax
 from keras.preprocessing.image import load_img
 from keras.preprocessing.image import img_to_array
 from keras.models import load_model
+import os
 import cv2
+
+Path = "sample_images"
 
 # load and prepare the image
 def load_image(filename):
@@ -20,18 +23,26 @@ def load_image(filename):
  
 # load an image and predict the class
 def run_example():
-	# load the image
-	img = load_image('sample_image.png')
-	# load model
-	model = load_model('ConvNet.h5')
-	# predict the class
-	predict_value = model.predict(img)
-	digit = argmax(predict_value)
-	answer = str(digit)
-	if (digit > 9):
-		answer = str(chr(digit-10+65))
 
-	print(answer)
+	model = load_model('ConvNet.h5')
+	for item in os.listdir(Path):
+		if item == '.DS_Store':
+			continue
+		filePath = Path+"/"+item
+		if os.path.isfile(filePath):
+			# load the image
+			img = load_image(filePath)
+			# load model
+			# predict the class
+			predict_value = model.predict(img)
+			digit = argmax(predict_value)
+			answer = str(digit)
+			if (digit > 9):
+				answer = str(chr(digit-10+65))
+
+			print(filePath + ": " + answer)
+		else:
+			print("Error path: " + filePath)
  
 # entry point, run the example
 run_example()

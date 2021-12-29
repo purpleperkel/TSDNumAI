@@ -2,6 +2,7 @@ Mercury/
 Mercury.modules
 HandwrittenData.csv
 TSDImageMerge/
+output_images/
 *.mh
 *.err
 *.init

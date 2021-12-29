@@ -46,10 +46,6 @@ def load_az_dataset(datasetPath):
 		# update the list of data and labels
 		data.append(image)
 		labels.append(label)
-		#np.append(data, image)
-		#np.append(labels, label)
-		#data.append(image)
-		#labels.append(label)
 	# convert the data and labels to NumPy arrays
 	data = np.array(data, dtype="float32")
 	labels = np.array(labels, dtype="int")
@@ -97,36 +93,10 @@ def define_model():
 	model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
 	return model
  
-# evaluate a model using k-fold cross-validation
-def evaluate_model(dataX, dataY, n_folds=5):
+# evaluate a model
+def evaluate_model(dataX, dataY):
 	scores, histories = list(), list()
-	# prepare cross validation
-	""""
-	kfold = KFold(n_folds, shuffle=True, random_state=1)
-	# enumerate splits
-	for train_ix, test_ix in kfold.split(dataX):
-		# define model
-		model = define_model()
-		# select rows for train and test
-		#trainX, trainY, testX, testY = dataX[train_ix], dataY[train_ix], dataX[test_ix], dataY[test_ix]
-		(trainX, testX, trainY, testY) = train_test_split(dataX[train_ix], dataY[train_ix], test_size=0.20, stratify=dataY, random_state=42)
-		# fit model
-		history = model.fit(
-			aug.flow(trainX, trainY, batch_size=32),
-			validation_data=(testX, testY),
-			steps_per_epoch=len(trainX) // 32,
-			epochs=3,
-			verbose=0)
-		#history = model.fit(trainX, trainY, epochs=10, batch_size=32, validation_data=(testX, testY), verbose=0)
-		# evaluate model
-		_, acc = model.evaluate(testX, testY, verbose=0)
-		print('> %.3f' % (acc * 100.0))
-		# stores scores
-		scores.append(acc)
-		histories.append(history)
-		"""
 	model = define_model()
-	#(trainX, testX, trainY, testY) = train_test_split(dataX, dataY, test_size=0.20, stratify=dataY, random_state=42)
 	(trainX, testX, trainY, testY) = train_test_split(dataX, dataY, test_size=0.20, random_state=42)
 	history = model.fit(
 	aug.flow(trainX, trainY, batch_size=32),
@@ -135,7 +105,6 @@ def evaluate_model(dataX, dataY, n_folds=5):
 	epochs=3,
 	verbose=0)
 	model.save("ConvNet.h5")
-	#history = model.fit(trainX, trainY, epochs=10, batch_size=32, validation_data=(testX, testY), verbose=0)
 	# evaluate model
 	_, acc = model.evaluate(testX, testY, verbose=0)
 	print('> %.3f' % (acc * 100.0))
@@ -171,15 +140,6 @@ def summarize_performance(scores):
 def run_test_harness():
 	dataPath = "HandwrittenData.csv"
 	# load dataset
-	#trainX, trainY, testX, testY = load_dataset()
-	# prepare pixel data
-	#trainX, testX = prep_pixels(trainX, testX)
-	# evaluate model
-	#scores, histories = evaluate_model(trainX, trainY)
-	# learning curves
-	#summarize_diagnostics(histories)
-	# summarize estimated performance
-	#summarize_performance(scores)
 	(azData, azLabels) = load_az_dataset(dataPath)
 	(digitsData, digitsLabels) = load_mnist_dataset()
 	azLabels += 10
@@ -188,8 +148,6 @@ def run_test_harness():
 	labels = np.hstack([azLabels, digitsLabels])
 	data = prep_pixels(data)
 
-	# reshape dataset to have a single channel
-	#data = data.reshape((data.shape[0], 28, 28, 1))
 	# one hot encode target values
 	labels = to_categorical(labels)
 	# evaluate model
@@ -199,6 +157,5 @@ def run_test_harness():
 	# summarize estimated performance
 	summarize_performance(scores)
 
- 
 # entry point, run the test harness
 run_test_harness()

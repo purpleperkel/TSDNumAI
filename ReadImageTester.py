@@ -2,7 +2,6 @@ from keras.preprocessing.image import load_img
 from tensorflow.keras.models import load_model
 from PIL import Image
 import numpy as np
-import argparse
 import cv2
 
 model = load_model('ConvNet.h5')
@@ -27,17 +26,21 @@ def sort_contours(cnts, method="left-to-right"):
 	# return the list of sorted contours and bounding boxes
 	return (cnts, boundingBoxes)
 
+def modify_tuple(x, y, tup):
+    ls = list(tup)
+    ls[0] += x
+    ls[1] += y
+    return tuple(ls)
+
 def get_edges(src, cdim, roipad, pan, tmp):
     edged = cv2.Canny(src, 50, 250)
     edgepic = np.array(edged)
     edgepic = Image.fromarray(edgepic.astype(np.uint8))
-    edgepic.save('edgepic.jpeg', 'JPEG')
+    edgepic.save('output_images/edgepic.jpeg', 'JPEG')
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(1,1))
     dilated = cv2.dilate(edged, kernel)
     dpic = Image.fromarray(dilated.astype(np.uint8))
-    dpic.save('dilated.jpeg', 'JPEG')
-    #cnts = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL,
-    #    cv2.CHAIN_APPROX_SIMPLE)
+    dpic.save('output_images/dilated.jpeg', 'JPEG')
     cnts = cv2.findContours(dilated.copy(), cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_SIMPLE)
 
@@ -117,17 +120,18 @@ def get_edges(src, cdim, roipad, pan, tmp):
             if (pan):
                 ckimg2 = Image.fromarray(thresh)
                 ckimg2.show()
-                #thresh = cv2.GaussianBlur(thresh, (3, 3), 0)
+                # apply morphological methods to make sure number contours will be closed
                 kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(2,2))
-                #erosion = cv2.morphologyEx(thresh,cv2.MORPH_OPEN,kernel)
                 erosion = cv2.erode(thresh,kernel,iterations = 1)
                 erosion = cv2.dilate(thresh,kernel,iterations = 1)
                 erosion = cv2.erode(thresh,kernel,iterations = 1)
                 morphpic = Image.fromarray(erosion.astype(np.uint8))
-                morphpic.save('morph.jpeg', 'JPEG')
+                morphpic.save('output_images/morph.jpeg', 'JPEG')
                 thresh = cv2.GaussianBlur(erosion, (5, 5), 0)
-                (chars, boxes) = get_edges(thresh, (0, 1, 0, 1), (0, 0, 0, 0), False, None)
+                (chars, boxes1) = get_edges(thresh, (0, 1, 0, 1), (0, 0, 0, 0), False, None)
+                boxes = list(map(lambda t: modify_tuple(x+pwx,y+plx,t), boxes1))
             else:
+                # append each character found
                 thresh = cv2.bitwise_not(thresh)
                 ckimg2 = Image.fromarray(thresh)
                 ckimg2.show()
@@ -145,19 +149,21 @@ image = cv2.imread("sample.png")
 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 temp = gray
 if (panMode):
+    # apply mask to get pan and reduce noise
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    lower_gray = np.array([0, 0, 80], np.uint8)
-    upper_gray = np.array([0, 0, 120], np.uint8)
+    #lower 80 upper 120 for 4000s
+    lower_gray = np.array([0, 0, 140], np.uint8)
+    upper_gray = np.array([0, 0, 200], np.uint8)
     mask = cv2.inRange(hsv, lower_gray, upper_gray)
     img_res = cv2.bitwise_and(image, image, mask = mask)
     gray = img_res
 
-cv2.imwrite('gray.png',gray)
+cv2.imwrite('output_images/gray.png',gray)
 blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-cv2.imwrite('blurred.png',blurred)
+cv2.imwrite('output_images/blurred.png',blurred)
 if (panMode):
     #(chars, boxes) = get_edges(blurred, (.25, .45, .25, .35), (11, -4, 4, -4), True, temp)
-    (chars, boxes) = get_edges(blurred, (.25, .45, .25, .35), (11, -8, 10, -4), True, temp)
+    (chars, boxes) = get_edges(blurred, (.3, .55, .25, .35), (11, -8, 10, -4), True, temp)
 else:
     (chars, boxes) = get_edges(blurred, (0, .8, .1, .9), (-2, 2, -2, 2), False, None)
 # OCR the characters using our handwriting recognition model

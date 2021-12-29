@@ -11,7 +11,6 @@ Path = "sample_images"
 def load_image(filename):
 	# load the image
     img = load_img(filename, grayscale=True, target_size=(32, 32))
-    #img = cv2.resize(img, (32, 32))
 	# convert to array
     img = img_to_array(img)
 	# reshape into a single sample with 1 channel

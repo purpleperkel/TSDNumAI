@@ -47,11 +47,16 @@ def resize_aspect_fit():
                         new_im.paste(im, ((final_size-new_image_size[0])//2, (final_size-new_image_size[1])//2))
                         new_im = new_im.convert("L")
                         new_im.save(f + 'resized.jpg', 'JPEG', quality=90)
-                        for i in range(0,100):
+                        for i in range(0,50):
                             random.seed(datetime.now())
-                            randAngle = random.random()*90
-                            rotateImage = new_im.rotate(randAngle)
-                            rotateImage.save(f + "rotate"+("{:.2f}".format(randAngle))+".jpg", 'JPEG', quality=90)
+                            randAngle = random.random()*15
+                            rotateImage = None
+                            if (i % 2 == 0):
+                                rotateImage = new_im.rotate(randAngle,resample=Image.BICUBIC)
+                                rotateImage.save(f + "rotate"+("{:.2f}".format(randAngle))+".jpg", 'JPEG', quality=90)
+                            else:
+                                rotateImage = new_im.rotate(-randAngle,  resample=Image.BICUBIC)
+                                rotateImage.save(f + "rotate"+("{:.2f}".format(-randAngle))+".jpg", 'JPEG', quality=90)
 
                         os.remove(filePath)
                     else:

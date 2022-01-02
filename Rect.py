@@ -276,7 +276,7 @@ color_thresholds = {
     "blue": ((90, 100, 180), (110, 255, 255)),
     "red": ((0, 100, 200), (20, 230, 255))
 }
-"""
+
 # read image
 img = cv2.imread("pan.jpg")
 # resize image
@@ -286,3 +286,4 @@ img = cv2.resize(img, (0,0), fx=0.25, fy=0.25, interpolation = cv2.INTER_AREA)
 roi = get_pan(img)
 cv2.imshow("rect_final", roi)
 cv2.waitKey(0)
+"""

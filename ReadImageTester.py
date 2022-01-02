@@ -3,9 +3,10 @@ from tensorflow.keras.models import load_model
 from PIL import Image
 import numpy as np
 import cv2
+import Rect
 
 model = load_model('ConvNet.h5')
-panMode = True
+panMode = False
 
 def sort_contours(cnts, method="left-to-right"):
 	# initialize the reverse flag and sort index
@@ -145,8 +146,16 @@ def get_edges(src, cdim, roipad, pan, tmp):
 
 # load the input image from disk, convert it to grayscale, and blur
 # it to reduce noise
-image = cv2.imread("sample.png")
-gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+image = cv2.imread("pan.jpg")
+
+#img = cv2.imread("pan.jpg")
+# resize image
+image = cv2.resize(image, (0,0), fx=0.25, fy=0.25, interpolation = cv2.INTER_AREA)
+roi = Rect.get_pan(image)
+#cv2.waitKey(0)
+
+#gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+gray = roi
 temp = gray
 if (panMode):
     # apply mask to get pan and reduce noise

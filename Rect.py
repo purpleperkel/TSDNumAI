@@ -16,14 +16,17 @@ def distance(pt1, pt2):
     return math.sqrt((x2-x1)**2 + (y2-y1)**2)
 
 
-def get_largest_contour(mask):
+def get_largest_contour(mask, color):
     # convert img to grayscale
     gray = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
     gray = 255-gray
 
     # do adaptive threshold on gray image
-    #thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 17, 1)
-    ret1,thresh = cv2.threshold(gray,170,255,cv2.THRESH_BINARY)
+    #thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    threshVal = 170
+    if (color == "indigo" or color == "purple"):
+        threshVal = 200
+    ret1,thresh = cv2.threshold(gray,threshVal,255,cv2.THRESH_BINARY)
     thresh = 255-thresh
 
     # apply morphology
@@ -91,12 +94,12 @@ def get_largest_contour(mask):
 
         # find largest contour that fits the aspect ratio and 
         # area ratio of a pan
-        i += 1
-        contours1 = c.reshape(-1,2)
-        if (area > area_thresh and ar > .4 and ar < .55 and imgArea > 0.007 and imgArea < .07):
+        #contours1 = c.reshape(-1,2)
+        if (area > area_thresh and ar > .4 and ar < .55 and imgArea > 0.01 and imgArea < .3):
             area_thresh = area
             bci = i
             big_contour = c
+        i += 1
 
     # get rotated rectangle from contour
     if (big_contour is not None):
@@ -124,23 +127,47 @@ def get_largest_contour(mask):
         cv2.imshow("BBOX", rot_bbox)
         return (contours, bci)
 
+def subimage(image, center, theta, width, height):
+
+   ''' 
+   Rotates OpenCV image around center with angle theta (in deg)
+   then crops the image according to width and height.
+   '''
+
+   # Uncomment for theta in radians
+   #theta *= 180/np.pi
+
+   shape = ( image.shape[1], image.shape[0] ) # cv2.warpAffine expects shape in (length, height)
+
+   matrix = cv2.getRotationMatrix2D( center=center, angle=theta, scale=1 )
+   image = cv2.warpAffine( src=image, M=matrix, dsize=shape )
+
+   x = int( center[0] - width/2  )
+   y = int( center[1] - height/2 )
+
+   image = image[ y:y+height, x:x+width ]
+
+   return image
+
 def get_pan(im):
     color_thresholds = {
-        "yellow": ((30, 100, 200), (50, 255, 255)),
+        "yellow": ((20, 100, 200), (50, 255, 255)),
         "pink": ((160, 0, 200), (180, 90, 255)),
-        "black": ((100, 0, 0), (120, 255, 40)),
-        "purple": ((110, 100, 200), (130, 255, 255)),
-        "white": ((80, 0, 200), (100, 255, 255)),
-        "gray": ((90, 70, 200), (110, 255, 255)),
-        "green": ((70, 100, 200), (90, 255, 255)),
-        "indigo": ((100, 100, 200), (120, 255, 255)),
         "blue": ((90, 100, 180), (110, 255, 255)),
-        "red": ((0, 100, 200), (20, 255, 255))
+        "purple": ((110, 100, 200), (130, 255, 255)),
+        "gray": ((90, 70, 150), (110, 255, 170)),
+        "green": ((70, 100, 120), (90, 255, 255)),
+        "indigo": ((100, 100, 200), (120, 255, 255)),
+        "red": ((0, 100, 200), (20, 230, 255)),
+        "black": ((100, 0, 0), (120, 255, 40)),
+        "white": ((80, 0, 250), (100, 255, 255))
     }
 
     i = 0
     bci = 0
     con = None
+    mask=None
+    color = None
     for c in color_thresholds:
         i += 1
         print(c)
@@ -148,19 +175,21 @@ def get_pan(im):
         #con = get_largest_contour(get_mask(im, color_thresholds[c]))
         mask = get_mask(im, color_thresholds[c])
         cv2.imwrite("output_images/mask.png", mask)
-        con = get_largest_contour(mask)
+        con = get_largest_contour(mask, c)
         if (con is not None):
             con, bci = con
+            color = c
             break
 
     if (con is not None):
         gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
         #print(box)
 
-        mask = np.zeros_like(gray) # Create mask where white is what we want, black otherwise
-        cv2.drawContours(mask, con, bci, 255, -1) # Draw filled contour in mask
+        maskarray = np.zeros_like(gray) # Create mask where white is what we want, black otherwise
+        cv2.drawContours(maskarray, con, bci, 255, -1) # Draw filled contour in mask
+        cv2.imshow("maskawwarCont", maskarray)
         out = np.zeros_like(im) # Extract out the object and place into output image
-        out[mask == 255] = im[mask == 255]
+        out[maskarray == 255] = im[maskarray == 255]
 
         rect = cv2.minAreaRect(con[bci])
         rot_bbox = out.copy()
@@ -169,25 +198,91 @@ def get_pan(im):
         cv2.drawContours(rot_bbox,[box],0,(0,0,255),1)
         pt, sz, ang = rect
         x,y = pt
-        h,w = sz
-        x = x - w/2
-        y = y - h/2
+        distances = list()
+        distances.append(distance(tuple(box[0]), tuple(box[1])))
+        distances.append(distance(tuple(box[0]), tuple(box[2])))
+        distances.append(distance(tuple(box[0]), tuple(box[3])))
+        h = min(distances)
+        distances.remove(h)
+        w = min(distances)
+        (w,h) = sz
+        #x = x - w/2
+        #y = y - h/2
         x = int(x)
         y = int(y)
         w = int(w)
         h = int(h)
         print("x,y: " + str(x) +","+ str(y))
         print("w,h: " + str(w) +","+ str(h))
-        roi = out[y:y+h, x:x+w]
+        #roi = out[y:y+h, x:x+w]
+        roi=subimage(out, (x,y), ang+270, h,w)
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        gray = 255-gray
+
+        # do adaptive threshold on gray image
+        #thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 17, 1)
+        threshVal = 170
+        if (color == "indigo" or color == "purple"):
+            threshVal = 200
+        ret1,thresh = cv2.threshold(gray,threshVal,255,cv2.THRESH_BINARY)
+        #thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        im_floodfill = thresh.copy()
+        # Mask used to flood filling.
+        # Notice the size needs to be 2 pixels than the image.
+        height, width = thresh.shape[:2]
+        #mask = np.zeros((height+2, width+2), np.uint8)
+        # Floodfill from point (0, 0)
+        im_floodfill = cv2.copyMakeBorder(
+            im_floodfill, 
+            10, 
+            10, 
+            10, 
+            10, 
+            cv2.BORDER_CONSTANT, 
+            value=255
+        )
+        if (im_floodfill[0][0] == 255):
+            cv2.floodFill(im_floodfill, None, (0,0), 0)
+        if (im_floodfill[height-2][0] == 255):
+            cv2.floodFill(im_floodfill, None, (width,0), 0)
+        if (im_floodfill[0][width-2] == 255):
+            cv2.floodFill(im_floodfill, None, (0,height), 0)
+        if (im_floodfill[height-2][width-2] == 255):
+            cv2.floodFill(im_floodfill, None, (width, height), 0)
+        # Invert floodfilled image
+        #im_floodfill_inv = cv2.bitwise_not(im_floodfill)
+        # Combine the two images to get the f`oreground.
+        #im_out = thresh | im_floodfill_inv
+        #thresh = 255-thresh
         cv2.imshow("ROI", roi)
+        cv2.imshow("ROITHRESH", thresh)
+        cv2.imshow("ROIINFILL", im_floodfill)
         cv2.imshow("maskk", mask)
         cv2.imshow("out", out)
         cv2.imshow("box", rot_bbox)
-        return roi
+        return im_floodfill
 
+""""
+
+color_thresholds = {
+    "yellow": ((20, 100, 200), (50, 255, 255)),
+    "pink": ((160, 0, 200), (180, 90, 255)),
+    "black": ((100, 0, 0), (120, 255, 40)),
+    "purple": ((110, 100, 200), (130, 255, 255)),
+    "white": ((80, 0, 250), (100, 255, 255)),
+    "gray": ((90, 70, 150), (110, 255, 170)),
+    "green": ((70, 100, 120), (90, 255, 255)),
+    "indigo": ((100, 100, 200), (120, 255, 255)),
+    "blue": ((90, 100, 180), (110, 255, 255)),
+    "red": ((0, 100, 200), (20, 230, 255))
+}
+"""
 # read image
 img = cv2.imread("pan.jpg")
 # resize image
 img = cv2.resize(img, (0,0), fx=0.25, fy=0.25, interpolation = cv2.INTER_AREA)
+#roi=get_mask(img, color_thresholds["indigo"])
+#get_largest_contour(roi)
 roi = get_pan(img)
+cv2.imshow("rect_final", roi)
 cv2.waitKey(0)

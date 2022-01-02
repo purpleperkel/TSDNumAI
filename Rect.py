@@ -66,7 +66,7 @@ def get_largest_contour(mask, color):
     # draw contours
     imcopy = mask.copy()
     cv2.drawContours(imcopy, contours, -1, (0, 0, 255), 3)
-    cv2.imwrite('output_images/dcontours.png', imcopy)
+    cv2.imwrite('output_images/'+color+'contours.png', imcopy)
 
     # get largest contour
     area_thresh = 0
@@ -95,7 +95,7 @@ def get_largest_contour(mask, color):
         # find largest contour that fits the aspect ratio and 
         # area ratio of a pan
         #contours1 = c.reshape(-1,2)
-        if (area > area_thresh and ar > .4 and ar < .55 and imgArea > 0.01 and imgArea < .3):
+        if (area > area_thresh and ar > .4 and ar < .55 and imgArea > 0.02 and imgArea < .3):
             area_thresh = area
             bci = i
             big_contour = c
@@ -158,7 +158,7 @@ def get_pan(im):
         "gray": ((90, 70, 150), (110, 255, 170)),
         "green": ((70, 100, 120), (90, 255, 255)),
         "indigo": ((100, 100, 200), (120, 255, 255)),
-        "red": ((0, 100, 200), (20, 230, 255)),
+        "red": ((0, 100, 200), (20, 255, 255)),
         "black": ((100, 0, 0), (120, 255, 40)),
         "white": ((80, 0, 250), (100, 255, 255))
     }
@@ -232,6 +232,17 @@ def get_pan(im):
         height, width = thresh.shape[:2]
         #mask = np.zeros((height+2, width+2), np.uint8)
         # Floodfill from point (0, 0)
+        # Border to ensure characters leading off the pan don't get filled in
+        im_floodfill = cv2.copyMakeBorder(
+            im_floodfill, 
+            1, 
+            0, 
+            0, 
+            0, 
+            cv2.BORDER_CONSTANT, 
+            value=0
+        )
+        # Border to ensure floodfill
         im_floodfill = cv2.copyMakeBorder(
             im_floodfill, 
             10, 
@@ -262,8 +273,8 @@ def get_pan(im):
         cv2.imshow("box", rot_bbox)
         return im_floodfill
 
-""""
 
+""""
 color_thresholds = {
     "yellow": ((20, 100, 200), (50, 255, 255)),
     "pink": ((160, 0, 200), (180, 90, 255)),
@@ -274,15 +285,25 @@ color_thresholds = {
     "green": ((70, 100, 120), (90, 255, 255)),
     "indigo": ((100, 100, 200), (120, 255, 255)),
     "blue": ((90, 100, 180), (110, 255, 255)),
-    "red": ((0, 100, 200), (20, 230, 255))
+    "red": ((0, 100, 200), (20, 255, 255))
 }
 
 # read image
 img = cv2.imread("pan.jpg")
 # resize image
 img = cv2.resize(img, (0,0), fx=0.25, fy=0.25, interpolation = cv2.INTER_AREA)
-#roi=get_mask(img, color_thresholds["indigo"])
-#get_largest_contour(roi)
+# put non-pan color border to ensure good pan contour
+img = cv2.copyMakeBorder(
+    img, 
+    10, 
+    10, 
+    10, 
+    10, 
+    cv2.BORDER_CONSTANT, 
+    value=(0,255,0)
+)
+#roi=get_mask(img, color_thresholds["red"])
+#get_largest_contour(roi, "red")
 roi = get_pan(img)
 cv2.imshow("rect_final", roi)
 cv2.waitKey(0)

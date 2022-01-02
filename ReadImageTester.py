@@ -151,6 +151,16 @@ image = cv2.imread("pan.jpg")
 #img = cv2.imread("pan.jpg")
 # resize image
 image = cv2.resize(image, (0,0), fx=0.25, fy=0.25, interpolation = cv2.INTER_AREA)
+# put non-pan color border to ensure good pan contour
+image = cv2.copyMakeBorder(
+    image, 
+    10, 
+    10, 
+    10, 
+    10, 
+    cv2.BORDER_CONSTANT, 
+    value=(0,255,0)
+)
 roi = Rect.get_pan(image)
 #cv2.waitKey(0)
 

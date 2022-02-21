@@ -3,6 +3,9 @@ Mercury.modules
 HandwrittenData.csv
 TSDImageMerge/
 output_images/
+*.png
+*.jpg
+*.jpeg
 *.mh
 *.err
 *.init

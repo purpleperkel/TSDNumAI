@@ -10,22 +10,24 @@ panMode = False
 
 def sort_contours(cnts, method="left-to-right"):
 	# initialize the reverse flag and sort index
-	reverse = False
-	i = 0
+    reverse = False
+    i = 0
 	# handle if we need to sort in reverse
-	if method == "right-to-left" or method == "bottom-to-top":
-		reverse = True
+    if method == "right-to-left" or method == "bottom-to-top":
+       reverse = True
 	# handle if we are sorting against the y-coordinate rather than
 	# the x-coordinate of the bounding box
-	if method == "top-to-bottom" or method == "bottom-to-top":
-		i = 1
-	# construct the list of bounding boxes and sort them from top to
-	# bottom
-	boundingBoxes = [cv2.boundingRect(c) for c in cnts]
-	(cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
-		key=lambda b:b[1][i], reverse=reverse))
+    if method == "top-to-bottom" or method == "bottom-to-top":
+       i = 1
+    # construct the list of bounding boxes and sort them from top to
+    # bottom
+    if (len(cnts) == 0):
+        return None
+    boundingBoxes = [cv2.boundingRect(c) for c in cnts]
+    (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
+       key=lambda b:b[1][i], reverse=reverse))
 	# return the list of sorted contours and bounding boxes
-	return (cnts, boundingBoxes)
+    return (cnts, boundingBoxes)
 
 def modify_tuple(x, y, tup):
     ls = list(tup)
@@ -53,7 +55,11 @@ def get_edges(src, cdim, roipad, pan, tmp):
     elif len(cnts) == 3:
         cnts = cnts[1]
 
-    cnts = sort_contours(cnts, method="left-to-right")[0]
+    cnts = sort_contours(cnts, method="left-to-right")
+    if (cnts is None):
+        return None
+    else:
+        cnts = cnts[0]
     # initialize the list of contour bounding boxes and associated
     # characters that we'll be OCR'ing
     chars = []
@@ -144,66 +150,143 @@ def get_edges(src, cdim, roipad, pan, tmp):
                 boxes.append((x,y,w,h))
     return (chars, boxes)
 
-# load the input image from disk, convert it to grayscale, and blur
-# it to reduce noise
-image = cv2.imread("pan.jpg")
+def get_debug_pred(debug_flag):
+    # load the input image from disk, convert it to grayscale, and blur
+    # it to reduce noise
+    image = cv2.imread("pan.jpg")
 
-#img = cv2.imread("pan.jpg")
-# resize image
-image = cv2.resize(image, (0,0), fx=0.25, fy=0.25, interpolation = cv2.INTER_AREA)
-# put non-pan color border to ensure good pan contour
-image = cv2.copyMakeBorder(
-    image, 
-    10, 
-    10, 
-    10, 
-    10, 
-    cv2.BORDER_CONSTANT, 
-    value=(0,255,0)
-)
-roi = Rect.get_pan(image)
-#cv2.waitKey(0)
+    #img = cv2.imread("pan.jpg")
+    # resize image
+    image = cv2.resize(image, (0,0), fx=0.25, fy=0.25, interpolation = cv2.INTER_AREA)
+    # put non-pan color border to ensure good pan contour
+    image = cv2.copyMakeBorder(
+        image, 
+        10, 
+        10, 
+        10, 
+        10, 
+        cv2.BORDER_CONSTANT, 
+        value=(0,255,0)
+    )
+    roi = Rect.get_pan(image, 0)
+    if (roi is None):
+        roi = Rect.get_pan(image, 1)
+        if (roi is None):
+            return None
+    #cv2.waitKey(0)
 
-#gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-gray = roi
-temp = gray
-if (panMode):
-    # apply mask to get pan and reduce noise
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    #lower 80 upper 120 for 4000s
-    lower_gray = np.array([0, 0, 140], np.uint8)
-    upper_gray = np.array([0, 0, 200], np.uint8)
-    mask = cv2.inRange(hsv, lower_gray, upper_gray)
-    img_res = cv2.bitwise_and(image, image, mask = mask)
-    gray = img_res
+    #gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    gray = roi
+    temp = gray
+    if (panMode):
+        # apply mask to get pan and reduce noise
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        #lower 80 upper 120 for 4000s
+        lower_gray = np.array([0, 0, 140], np.uint8)
+        upper_gray = np.array([0, 0, 200], np.uint8)
+        mask = cv2.inRange(hsv, lower_gray, upper_gray)
+        img_res = cv2.bitwise_and(image, image, mask = mask)
+        gray = img_res
 
-cv2.imwrite('output_images/gray.png',gray)
-blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-cv2.imwrite('output_images/blurred.png',blurred)
-if (panMode):
-    #(chars, boxes) = get_edges(blurred, (.25, .45, .25, .35), (11, -4, 4, -4), True, temp)
-    (chars, boxes) = get_edges(blurred, (.3, .55, .25, .35), (11, -8, 10, -4), True, temp)
-else:
-    (chars, boxes) = get_edges(blurred, (0, .8, .1, .9), (-2, 2, -2, 2), False, None)
-# OCR the characters using our handwriting recognition model
-preds = list(map(model.predict, chars))
-# define the list of label names
-labelNames = "0123456789"
-labelNames += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-labelNames = [l for l in labelNames]
+    cv2.imwrite('output_images/gray.png',gray)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    cv2.imwrite('output_images/blurred.png',blurred)
+    #if (panMode):
+        #(chars, boxes) = get_edges(blurred, (.25, .45, .25, .35), (11, -4, 4, -4), True, temp)
+    #    (chars, boxes) = get_edges(blurred, (.3, .55, .25, .35), (11, -8, 10, -4), True, temp)
+    #else:
+    edges = get_edges(blurred, (.05, .8, .05, .9), (-2, 2, -2, 2), False, None)
+    (chars, boxes) = edges
+    # OCR the characters using our handwriting recognition model
+    preds = list(map(model.predict, chars))
+    # define the list of label names
+    labelNames = "0123456789"
+    labelNames += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    labelNames = [l for l in labelNames]
 
-# loop over the predictions and bounding box locations together
-for (pred, (x, y, w, h)) in zip(preds, boxes):
-    # find the index of the label with the largest corresponding
-    # probability, then extract the probability and label
-    i = np.argmax(pred)
-    prob = pred[0][i]
-    label = labelNames[i]
-    # draw the prediction on the image
-    print("[INFO] {} - {:.2f}%".format(label, prob * 100))
-    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-    cv2.putText(image, label, (x - 10, y - 10),
-        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
-    # show the image
-    cv2.imshow("Image", image)
-    cv2.waitKey(0)
+    # loop over the predictions and bounding box locations together
+    for (pred, (x, y, w, h)) in zip(preds, boxes):
+        # find the index of the label with the largest corresponding
+        # probability, then extract the probability and label
+        i = np.argmax(pred)
+        prob = pred[0][i]
+        label = labelNames[i]
+        # draw the prediction on the image
+        print("[INFO] {} - {:.2f}%".format(label, prob * 100))
+        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.putText(image, label, (x - 10, y - 10),
+            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
+        # show the image
+        cv2.imshow("Image", image)
+        cv2.waitKey(0)
+
+def get_pred(src, debug_flag):
+    # load the input image from disk, convert it to grayscale, and blur
+    # it to reduce noise
+    image = cv2.imread(src)
+
+    #img = cv2.imread("pan.jpg")
+    # resize image
+    image = cv2.resize(image, (0,0), fx=0.25, fy=0.25, interpolation = cv2.INTER_AREA)
+    # put non-pan color border to ensure good pan contour
+    image = cv2.copyMakeBorder(
+        image, 
+        10, 
+        10, 
+        10, 
+        10, 
+        cv2.BORDER_CONSTANT, 
+        value=(0,255,0)
+    )
+    roi = Rect.get_pan(image, 0)
+    if (roi is None):
+        print("trying mode 1")
+        roi = Rect.get_pan(image, 1)
+        if (roi is None):
+            return None
+    #cv2.waitKey(0)
+
+    #gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    gray = roi
+    temp = gray
+    #cv2.imwrite('output_images/gray.png',gray)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    #cv2.imwrite('output_images/blurred.png',blurred)
+    #if (panMode):
+        #(chars, boxes) = get_edges(blurred, (.25, .45, .25, .35), (11, -4, 4, -4), True, temp)
+    #    (chars, boxes) = get_edges(blurred, (.3, .55, .25, .35), (11, -8, 10, -4), True, temp)
+    #else:
+    edges = get_edges(blurred, (0, .8, .1, .9), (-2, 2, -2, 2), False, None)
+
+    if (edges is None):
+        return "oh no :c"
+
+    (chars, boxes) = edges
+    # OCR the characters using our handwriting recognition model
+    preds = list(map(model.predict, chars))
+    # define the list of label names
+    labelNames = "0123456789"
+    labelNames += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    labelNames = [l for l in labelNames]
+    return_string=""
+
+    # loop over the predictions and bounding box locations together
+    for (pred, (x, y, w, h)) in zip(preds, boxes):
+        # find the index of the label with the largest corresponding
+        # probability, then extract the probability and label
+        i = np.argmax(pred)
+        prob = pred[0][i]
+        label = labelNames[i]
+        return_string = return_string+label
+        # draw the prediction on the image
+        print("[INFO] {} - {:.2f}%".format(label, prob * 100))
+        #cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        #cv2.putText(image, label, (x - 10, y - 10),
+        #    cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
+        # show the image
+        #cv2.imshow("Image", image)
+        #cv2.waitKey(0)
+    
+    return return_string
+
+get_debug_pred(True)
